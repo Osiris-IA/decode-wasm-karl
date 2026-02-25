@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
-    <script type="module">
+    <script type="module" defer>
       const { instance } = await WebAssembly.instantiateStreaming(
         fetch("build/add.wasm"),
       );
@@ -28,42 +28,199 @@
           },
         });
 
+      const canvas = document.getElementById("canvas_pixels_as");
+      const ctx = canvas.getContext("2d");
+      let width = canvas.width;
+      let height = canvas.height;
+      const memoryPixelsAs = new WebAssembly.Memory({
+        initial: 100,
+      });
+      let imageBuffer;
+      const { instance: instancePixelsAs } =
+        await WebAssembly.instantiateStreaming(fetch("build/pixels_as.wasm"), {
+          env: {
+            memory: memoryPixelsAs,
+            seed: Math.random,
+          },
+        });
+
       const { add } = instance.exports;
       const { pow } = instancePower.exports;
       const { is_premier } = instanceIsPremier.exports;
       const { fibo } = instanceFibo.exports;
       const { cesar } = instanceCesar.exports;
+      const { generate_pixels } = instancePixelsAs.exports;
 
-      const a = 3;
-      const b = 4;
-      const result = add(a, b);
-      const result2 = pow(a, b);
-      document.write(`Result of ${a} + ${b} = ${result}<br/>`);
-      document.write(`Result of ${a} ^ ${b} = ${result2}<br/>`);
-      document.write(`is premier 11 : ${is_premier(11).toString()}<br/>`);
-      document.write(
-        `is premier 123456789 : ${is_premier(123456789).toString()}<br/>`,
-      );
-      document.write(`is premier 121 : ${is_premier(121).toString()}<br/>`);
-      document.write(`fibo 0 : ${fibo(0)}<br/>`);
-      document.write(`fibo 1 : ${fibo(1)}<br/>`);
-      document.write(`fibo 2 : ${fibo(2)}<br/>`);
-      document.write(`fibo 10 : ${fibo(10)}<br/>`);
+      const displayResult = (id, result) => {
+        document.getElementById(id).innerHTML = `Résultat : ${result}`;
+      };
 
-      const sentence = "Je suis super content j adore le webassembly";
-      const encodedSentence = new TextEncoder().encode(sentence);
-      const arrayBuffer = new Uint8Array(memoryCesar.buffer);
-      arrayBuffer.set(encodedSentence, 0);
+      document.getElementById("btn_add").onclick = () => {
+        const a = parseInt(document.getElementById("addA").value);
+        const b = parseInt(document.getElementById("addB").value);
+        displayResult("res_add", add(a, b));
+      };
 
-      const memorySize = cesar(encodedSentence.length);
-      const decodedSentence = new TextDecoder().decode(
-        arrayBuffer.slice(0, memorySize),
-      );
+      document.getElementById("btn_pow").onclick = () => {
+        const a = parseInt(document.getElementById("powA").value);
+        const b = parseInt(document.getElementById("powB").value);
+        displayResult("res_pow", pow(a, b));
+      };
 
-      document.write(`cesar ${sentence} => ${decodedSentence}`);
+      document.getElementById("btn_premier").onclick = () => {
+        const n = parseInt(document.getElementById("premierN").value);
+        displayResult("res_premier", is_premier(n).toString());
+      };
+
+      document.getElementById("btn_fibo").onclick = () => {
+        const n = parseInt(document.getElementById("fiboN").value);
+        displayResult("res_fibo", fibo(n));
+      };
+
+      document.getElementById("btn_cesar").onclick = () => {
+        const sentence = document.getElementById("cesarText").value;
+        const encodedSentence = new TextEncoder().encode(sentence);
+        const arrayBuffer = new Uint8Array(memoryCesar.buffer);
+        arrayBuffer.set(encodedSentence, 0);
+
+        const memorySize = cesar(encodedSentence.length);
+        const decodedSentence = new TextDecoder().decode(
+          arrayBuffer.slice(0, memorySize),
+        );
+        displayResult("res_cesar", decodedSentence);
+      };
+
+      function generate_pixels_js(w, h) {
+        for (let i = 0; i < w * h * 4; i++) {
+          imageBuffer[i] = Math.floor(Math.random() * 256);
+        }
+      }
+
+      let animationId = null;
+
+      document.getElementById("btn_pixels_as").addEventListener("click", () => {
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+        }
+
+        width = parseInt(document.getElementById("canvas_width").value);
+        height = parseInt(document.getElementById("canvas_height").value);
+        canvas.width = width;
+        canvas.height = height;
+
+        const neededSize = width * height * 4;
+        const currentPages = memoryPixelsAs.buffer.byteLength / 65536;
+        const neededPages = Math.ceil(neededSize / 65536);
+        if (neededPages > currentPages) {
+          memoryPixelsAs.grow(neededPages - currentPages);
+        }
+        imageBuffer = new Uint8ClampedArray(
+          memoryPixelsAs.buffer,
+          0,
+          neededSize,
+        );
+
+        const fpsDisplay = document.getElementById("fps_display");
+        let lastTime = performance.now();
+        let frameCount = 0;
+
+        const useWasm = document.querySelector(
+          'input[name="pixel_as_generator"]:checked',
+        ).value;
+        const generator =
+          useWasm === "Wasm" ? generate_pixels : generate_pixels_js;
+        function render() {
+          const now = performance.now();
+          frameCount++;
+          if (now - lastTime >= 1000) {
+            fpsDisplay.innerText = `FPS: ${frameCount}`;
+            frameCount = 0;
+            lastTime = now;
+          }
+
+          generator(width, height);
+          const imageData = new ImageData(imageBuffer, width, height);
+          ctx.putImageData(imageData, 0, 0);
+          animationId = requestAnimationFrame(render);
+        }
+        render();
+      });
     </script>
   </head>
   <body>
     <h1>Super module : WebAssembly</h1>
+    <h2>Séance 1</h2>
+
+    <section>
+      <h3>Démo Add</h3>
+      <input type="number" id="addA" value="3" />
+      <input type="number" id="addB" value="4" />
+      <button id="btn_add">Additionner</button>
+      <div id="res_add"></div>
+    </section>
+
+    <section>
+      <h3>Exo Power</h3>
+      <input type="number" id="powA" value="3" />
+      <input type="number" id="powB" value="4" />
+      <button id="btn_pow">Calculer Puissance</button>
+      <div id="res_pow"></div>
+    </section>
+
+    <section>
+      <h3>Démo Is Premier</h3>
+      <input type="number" id="premierN" value="11" />
+      <button id="btn_premier">Vérifier si premier</button>
+      <div id="res_premier"></div>
+    </section>
+
+    <section>
+      <h3>Exo Fibo</h3>
+      <input type="number" id="fiboN" value="10" />
+      <button id="btn_fibo">Calculer Fibo</button>
+      <div id="res_fibo"></div>
+    </section>
+
+    <h2>Séance 2</h2>
+    <section>
+      <h3>Exo Cesar</h3>
+      <input
+        type="text"
+        id="cesarText"
+        value="Je suis super content j adore le webassembly"
+      />
+      <button id="btn_cesar">Encoder via Cesar</button>
+      <div id="res_cesar"></div>
+    </section>
+    <section>
+      <h3>Pluie de pixels</h3>
+      <label
+        >Largeur: <input type="number" id="canvas_width" value="400" step="10"
+      /></label>
+      <label
+        >Hauteur: <input type="number" id="canvas_height" value="300" step="10"
+      /></label>
+      <br />
+      <label
+        >Js <input type="radio" name="pixel_as_generator" value="JS" />
+      </label>
+      <label
+        >Wasm
+        <input type="radio" name="pixel_as_generator" value="Wasm" checked />
+      </label>
+      <button type="button" id="btn_pixels_as">
+        Lancer la pluie de pixels
+      </button>
+      <div id="fps_display" style="font-weight: bold; margin-top: 5px">
+        FPS: 0
+      </div>
+      <br />
+      <canvas
+        id="canvas_pixels_as"
+        width="400"
+        height="300"
+        style="border: 1px solid black; margin-top: 10px"
+      ></canvas>
+    </section>
   </body>
 </html>
