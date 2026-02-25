@@ -8,13 +8,59 @@
       const { instance } = await WebAssembly.instantiateStreaming(
         fetch("build/add.wasm"),
       );
+      const { instance: instancePower } =
+        await WebAssembly.instantiateStreaming(fetch("build/power.wasm"));
+
+      const { instance: instanceIsPremier } =
+        await WebAssembly.instantiateStreaming(fetch("build/is_premier.wasm"));
+
+      const { instance: instanceFibo } = await WebAssembly.instantiateStreaming(
+        fetch("build/fibo.wasm"),
+      );
+
+      const memoryCesar = new WebAssembly.Memory({
+        initial: 1,
+      });
+      const { instance: instanceCesar } =
+        await WebAssembly.instantiateStreaming(fetch("build/cesar.wasm"), {
+          env: {
+            memory: memoryCesar,
+          },
+        });
 
       const { add } = instance.exports;
+      const { pow } = instancePower.exports;
+      const { is_premier } = instanceIsPremier.exports;
+      const { fibo } = instanceFibo.exports;
+      const { cesar } = instanceCesar.exports;
 
       const a = 3;
       const b = 4;
       const result = add(a, b);
-      document.write(`Result of ${a} + ${b} = ${result}`);
+      const result2 = pow(a, b);
+      document.write(`Result of ${a} + ${b} = ${result}<br/>`);
+      document.write(`Result of ${a} ^ ${b} = ${result2}<br/>`);
+      document.write(`is premier 11 : ${is_premier(11).toString()}<br/>`);
+      document.write(
+        `is premier 123456789 : ${is_premier(123456789).toString()}<br/>`,
+      );
+      document.write(`is premier 121 : ${is_premier(121).toString()}<br/>`);
+      document.write(`fibo 0 : ${fibo(0)}<br/>`);
+      document.write(`fibo 1 : ${fibo(1)}<br/>`);
+      document.write(`fibo 2 : ${fibo(2)}<br/>`);
+      document.write(`fibo 10 : ${fibo(10)}<br/>`);
+
+      const sentence = "Je suis super content j adore le webassembly";
+      const encodedSentence = new TextEncoder().encode(sentence);
+      const arrayBuffer = new Uint8Array(memoryCesar.buffer);
+      arrayBuffer.set(encodedSentence, 0);
+
+      const memorySize = cesar(encodedSentence.length);
+      const decodedSentence = new TextDecoder().decode(
+        arrayBuffer.slice(0, memorySize),
+      );
+
+      document.write(`cesar ${sentence} => ${decodedSentence}`);
     </script>
   </head>
   <body>
