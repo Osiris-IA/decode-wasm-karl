@@ -10,7 +10,8 @@
       let width = canvas.width;
       let height = canvas.height;
       const memoryPixels = new WebAssembly.Memory({
-        initial: 150,
+        initial: 256,
+        maximum: 256,
       });
       let imageBuffer;
       const { instance: instancePixelsAs } =
@@ -27,6 +28,10 @@
             seed: Math.random,
           },
         });
+
+      if (instancePixelsCpp.exports.__wasm_call_ctors) {
+        instancePixelsCpp.exports.__wasm_call_ctors();
+      }
 
       
       const { generate_pixels: generate_pixels_as } = instancePixelsAs.exports;

@@ -33,7 +33,8 @@
       let width = canvas.width;
       let height = canvas.height;
       const memoryPixels = new WebAssembly.Memory({
-        initial: 100,
+        initial: 256,
+        maximum: 256,
       });
       let imageBuffer;
       const { instance: instancePixelsAs } =
@@ -50,6 +51,10 @@
             seed: Math.random,
           },
         });
+
+      if (instancePixelsCpp.exports.__wasm_call_ctors) {
+        instancePixelsCpp.exports.__wasm_call_ctors();
+      }
 
       const memoryParticles = new WebAssembly.Memory({ initial: 10 });
       const { instance: instanceParticles } =
@@ -78,6 +83,33 @@
       // tableDispatcher.set(1, dispatchPerdre);
       // tableDispatcher.set(2, dispatchNull);
 
+      const { instance: instanceCallback } =
+      await WebAssembly.instantiateStreaming(fetch("build/callback.wasm"), {
+        env: {
+          long_press: (percent) => {
+            console.log(`Long press: ${percent}%`);
+          },
+        },
+      });
+
+      const simulatorBille = {
+        results: [],
+        reset: () => {
+          simulatorBille.results = [];
+        },
+        update: (x, y) => {
+          simulatorBille.results.push({ x, y });
+        },
+      }
+      const { instance: instanceBille } =
+      await WebAssembly.instantiateStreaming(fetch("build/bille.wasm"), {
+        env: {
+          animer_bille: (x, y) => {
+            simulatorBille.update(x, y);
+          },
+        },
+      });
+
       const { add } = instance.exports;
       const { pow } = instancePower.exports;
       const { is_premier } = instanceIsPremier.exports;
@@ -87,6 +119,8 @@
       const { generate_pixels: generate_pixels_cpp } = instancePixelsCpp.exports;
       const { simulate_particles } = instanceParticles.exports;
       const { analyser_score } = instanceDispatcher.exports;
+      const { start_long_press } = instanceCallback.exports;
+      const { lancer_simulation } = instanceBille.exports;
 
       const displayResult = (id, result) => {
         document.getElementById(id).innerHTML = `Résultat : ${result}`;
@@ -227,6 +261,26 @@
         const score = parseInt(document.getElementById("score").value);
         analyser_score(score);
       });
+
+      document.getElementById("btn_callback").addEventListener("click", () => {
+        start_long_press();
+      });
+
+      document.getElementById("btn_bille").addEventListener("click", () => {
+        simulatorBille.reset();
+        lancer_simulation(0, 0, 10000);
+        const bille = document.getElementById("bille");
+        bille.style.display = "block";
+        bille.style.left = "0px";
+        bille.style.top = "0px";
+        bille.style.transition = "all 0.1s linear";
+        const intervalId = setInterval(() => {
+          const result = simulatorBille.results.shift();
+          if (!result) clearInterval(intervalId);
+          bille.style.left = result.x + "px";
+          bille.style.top = result.y + "px";
+        }, 100);
+      });
     </script>
   </head>
   <body>
@@ -329,6 +383,15 @@
       <h3>Demo dispatcher</h3>
       <label>Score: <input id="score" type="number" value="0" /></label>
       <button id="btn_dispatcher">Dispatcher l'événement</button>
+    </section>
+    <section>
+      <h3>Demo callback</h3>
+      <button id="btn_callback">Lancer le callback</button>
+    </section>
+    <section>
+      <h3>Demo bille</h3>
+      <button id="btn_bille">Lancer la simulation</button>
+      <div id="bille" style="width: 50px; height: 50px; background-color: red; border-radius: 50%; position: fixed; top: 0; left: 0;display: none;"></div>
     </section>
   </body>
 </html>
